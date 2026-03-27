@@ -1,0 +1,267 @@
+{
+  "meta": {
+    "project": "LOLM \u2014 Latent Order Language Model",
+    "authors": "Bryan Leonard & Brandyn Leonard \u2014 Qira LLC",
+    "patent": "Application #64/002,166 (Filed March 10, 2026)",
+    "repo": "https://github.com/TheArtOfSound/LOLM",
+    "proof_pack": "LOLM_Proof_Pack.pdf (11 pages, verified data)"
+  },
+  "h200_results": {
+    "lolm_1_57b": {
+      "params": "1,568,085,569",
+      "ppl": 33.2,
+      "gate": 0.72,
+      "regimes": "64/64",
+      "dataset": "FineWeb-Edu",
+      "hardware": "H200 140GB"
+    },
+    "baseline_1_57b": {
+      "params": "~1,570,000,000",
+      "ppl": 39.1,
+      "dataset": "FineWeb-Edu",
+      "hardware": "H200 140GB"
+    },
+    "delta": "15.1% better PPL",
+    "lolm_304m": {
+      "params": "304M",
+      "ppl": 68.37,
+      "dataset": "WikiText-103"
+    },
+    "pythia_410m": {
+      "params": "410M",
+      "ppl": 142.93,
+      "dataset": "WikiText-103"
+    },
+    "delta_pythia": "52.2% better PPL",
+    "gate_ablation": {
+      "normal": {
+        "loss": 3.54,
+        "ppl": 34.47,
+        "gate": 0.706
+      },
+      "surface_only": {
+        "loss": 76.89,
+        "ppl": 485165195,
+        "note": "14,000,000x PPL explosion"
+      },
+      "latent_only": {
+        "loss": 10.94,
+        "ppl": 56130
+      }
+    }
+  },
+  "downstream_evals": {
+    "source": "tpu_results/eval_full_20k.json",
+    "full_lolm_20k": {
+      "wikitext_ppl": 2025.69,
+      "hellaswag": 0.26,
+      "lambada": 0.01,
+      "params": 319319841
+    },
+    "baseline_20k": {
+      "wikitext_ppl": 2166.46,
+      "hellaswag": 0.22,
+      "lambada": 0.01,
+      "params": 253905920
+    },
+    "pythia_410m": {
+      "hellaswag": 0.305,
+      "note": "Pre-trained, much more data"
+    }
+  },
+  "tpu_comparison_20k": {
+    "note": "200-step averaged windows from clean first-run logs",
+    "source_lolm": "tpu_results/clean/full_lolm_run1.jsonl (20,981 entries)",
+    "source_base": "tpu_results/clean/matched_baseline_run1.jsonl (36,240 entries)",
+    "checkpoints": {
+      "1000": {
+        "lolm_loss": 9.669,
+        "lolm_ppl": 15820,
+        "base_loss": 9.3478,
+        "base_ppl": 11474,
+        "delta_pct": -37.9,
+        "n_samples": 201
+      },
+      "2000": {
+        "lolm_loss": 8.1458,
+        "lolm_ppl": 3449,
+        "base_loss": 9.1652,
+        "base_ppl": 9558,
+        "delta_pct": 63.9,
+        "n_samples": 201
+      },
+      "3000": {
+        "lolm_loss": 7.2878,
+        "lolm_ppl": 1462,
+        "base_loss": 8.0195,
+        "base_ppl": 3040,
+        "delta_pct": 51.9,
+        "n_samples": 201
+      },
+      "5000": {
+        "lolm_loss": 6.6969,
+        "lolm_ppl": 810,
+        "base_loss": 7.0962,
+        "base_ppl": 1207,
+        "delta_pct": 32.9,
+        "n_samples": 201
+      },
+      "7500": {
+        "lolm_loss": 6.4869,
+        "lolm_ppl": 656,
+        "base_loss": 6.7628,
+        "base_ppl": 865,
+        "delta_pct": 24.1,
+        "n_samples": 201
+      },
+      "10000": {
+        "lolm_loss": 6.3295,
+        "lolm_ppl": 561,
+        "base_loss": 6.5511,
+        "base_ppl": 700,
+        "delta_pct": 19.9,
+        "n_samples": 201
+      },
+      "15000": {
+        "lolm_loss": 6.0688,
+        "lolm_ppl": 432,
+        "base_loss": 6.1765,
+        "base_ppl": 481,
+        "delta_pct": 10.2,
+        "n_samples": 201
+      },
+      "20000": {
+        "lolm_loss": 5.9404,
+        "lolm_ppl": 380,
+        "base_loss": 6.0195,
+        "base_ppl": 411,
+        "delta_pct": 7.6,
+        "n_samples": 201
+      }
+    }
+  },
+  "active_runs": {
+    "full_pile": {
+      "step": 2,
+      "loss": 106.1251,
+      "ppl": 485165195,
+      "entries": 2,
+      "gate": 0.377,
+      "regimes": 32
+    },
+    "base_pile_f32": {
+      "step": 1418,
+      "loss": 9.2003,
+      "ppl": 9900,
+      "entries": 1418,
+      "gate": null,
+      "regimes": null
+    },
+    "baseline": {
+      "step": 12350,
+      "loss": 6.1774,
+      "ppl": 482,
+      "entries": 247,
+      "gate": 0.7065,
+      "regimes": null
+    },
+    "no_regime": {
+      "step": 1209,
+      "loss": 10.2935,
+      "ppl": 29541,
+      "entries": 1209,
+      "gate": 0.5002,
+      "regimes": null
+    },
+    "param_matched": {
+      "step": 6249,
+      "loss": 6.2993,
+      "ppl": 544,
+      "entries": 6249,
+      "gate": null,
+      "regimes": null
+    },
+    "no_gate": {
+      "step": 46,
+      "loss": 48.5633,
+      "ppl": 485165195,
+      "entries": 46,
+      "gate": 0.5,
+      "regimes": 32
+    },
+    "full_lolm": {
+      "step": 20981,
+      "loss": 6.1561,
+      "ppl": 472,
+      "entries": 20981,
+      "gate": 0.7871,
+      "regimes": 32
+    },
+    "matched_baseline": {
+      "step": 36240,
+      "loss": 5.412,
+      "ppl": 224,
+      "entries": 36240,
+      "gate": null,
+      "regimes": null
+    },
+    "lolm2": {
+      "step": 19900,
+      "loss": 5.8321,
+      "ppl": 341,
+      "entries": 398,
+      "gate": 0.7767,
+      "regimes": null
+    },
+    "full_c4": {
+      "step": 2000,
+      "loss": 7.0767,
+      "ppl": 1184,
+      "entries": 2000,
+      "gate": 0.6222,
+      "regimes": 32
+    },
+    "lolm": {
+      "step": 19650,
+      "loss": 5.809,
+      "ppl": 333,
+      "entries": 393,
+      "gate": 0.754,
+      "regimes": null
+    },
+    "full_lolm_clean": {
+      "step": 20981,
+      "loss": 6.1561,
+      "ppl": 472,
+      "entries": 20981,
+      "note": "Clean first-run data (20K steps)",
+      "gate": 0.7871
+    },
+    "matched_baseline_clean": {
+      "step": 36240,
+      "loss": 5.412,
+      "ppl": 224,
+      "entries": 36240,
+      "note": "Clean first-run data (36K steps)"
+    }
+  },
+  "completed_runs": {
+    "no_ssm": {
+      "step": 50000,
+      "loss": 5.1394,
+      "ppl": 171,
+      "entries": 1000,
+      "gate": null,
+      "regimes": null
+    },
+    "base_c4_f32": {
+      "step": 50000,
+      "loss": 5.3306,
+      "ppl": 207,
+      "entries": 50000,
+      "gate": null,
+      "regimes": null
+    }
+  },
+  "ablations": {}
+}
