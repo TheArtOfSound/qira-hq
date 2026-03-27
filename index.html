@@ -97,10 +97,30 @@ html+=`<div class="hero">
   <div class="item"><div class="val" style="color:#00ff88;">+15%</div><div class="lbl">H200 1.57B (PROVEN)</div></div>
   <div class="item"><div class="val" style="color:#ff4444;">14Mx</div><div class="lbl">GATE ABLATION (FROM FILE)</div></div>
   <div class="item"><div class="val" style="color:#00aaff;">#64002166</div><div class="lbl">PATENT FILED</div></div>
-  <div class="item"><div class="val" style="color:#888;">7B</div><div class="lbl">PENDING (TPU PREEMPTED)</div></div>
+  <div class="item"><div class="val" style="color:#ffaa00;animation:pulse 2s infinite;">1.4B</div><div class="lbl">TRAINING NOW (TPU v4-8)</div></div>
 </div>
 <div class="src">All TPU numbers computed from raw .jsonl log files. H200 gate ablation from results/ablation_gate_step20000.txt.</div>
 </div>`;
+
+// ═══════════════ 1.4B SCALE RUN BANNER ═══════════════
+let s14=data['lolm_1_4b'];
+if(s14){
+  let st14=s14._status||'TRAINING';
+  let stColor=st14==='COMPILING'?'#ffaa00':st14==='TRAINING'?'#00ff88':'#666';
+  html+=`<div class="sec" style="border:2px solid #ffaa00;background:linear-gradient(135deg,#1a1500,#0a0a20);margin-bottom:20px;">
+  <h2 style="color:#ffaa00;font-size:1.3em;"><span class="dot" style="background:#ffaa00;animation:pulse 2s infinite;"></span> SCALE RUN: 1.4B FULL LOLM — LARGEST YET</h2>
+  <div style="display:flex;gap:30px;flex-wrap:wrap;margin-top:10px;">
+    <div class="m"><div class="k">PARAMS</div><div class="v" style="color:#ffaa00;font-size:1.4em;">${s14._params||'1.39B'}</div></div>
+    <div class="m"><div class="k">CONFIG</div><div class="v" style="color:#888;">${s14._config||'d=2048 n=28 h=16'}</div></div>
+    <div class="m"><div class="k">HARDWARE</div><div class="v" style="color:#00aaff;">${s14._hardware||'TPU v4-8'}</div></div>
+    <div class="m"><div class="k">STATUS</div><div class="v" style="color:${stColor};animation:${st14==='COMPILING'||st14==='TRAINING'?'pulse 2s infinite':'none'};">${st14}</div></div>
+    <div class="m"><div class="k">STEP</div><div class="v" style="color:#00ff88;">${(s14.step||0).toLocaleString()}</div></div>
+    ${s14.loss_tok>0?'<div class="m"><div class="k">LOSS</div><div class="v" style="color:#ff8800;">'+s14.loss_tok.toFixed(3)+'</div></div>':''}
+    ${s14.gate_mean>0?'<div class="m"><div class="k">GATE</div><div class="v" style="color:#00aaff;">'+s14.gate_mean.toFixed(3)+'</div></div>':''}
+  </div>
+  <div class="src-line" style="margin-top:10px;">Full 5-stream architecture: Surface Decoder + Latent SSM + Memory + Regime + Gate | 28 layers, d=2048 | FineWeb-Edu</div>
+  </div>`;
+}
 
 // ═══════════════ TWO KEY COMPARISONS ═══════════════
 function compTable(lKey,bKey,title,srcL,srcB){
@@ -175,7 +195,7 @@ html+='</div>'; // g3
 
 // ═══════════════ ACTIVE TRAINING ═══════════════
 let liveRuns=[
-  ['7b_full','7B FULL LOLM (v6e-16)','fw','lv'],
+  ['lolm_1_4b','1.4B FULL LOLM (v4-8)','fw','lv'],
   ['full_lolm_live','FULL LOLM 300M','fw','lv'],['matched_baseline_live','Match Base','fw','lv'],
   ['param_matched','ParamMatch 317M','fw','lv'],['no_regime','No Regime','ab','lv'],
   ['no_gate','No Gate','ab','lv'],['full_c4','FULL LOLM C4','c4','lv'],
@@ -223,7 +243,11 @@ html+='<tr><td>Paper</td><td class="w">UPDATED</td><td>12 pages with TPU results
 html+='<tr><td>Proof Pack</td><td class="w">V2 AUDITED</td><td>12 pages, every number file-verified</td></tr>';
 html+='<tr><td>GitHub</td><td class="w">POLISHED</td><td>README, configs, eval scripts, citation</td></tr>';
 html+='<tr><td>LinkedIn</td><td style="color:#ffaa00;">DRAFTED</td><td>Ready to publish</td></tr>';
-html+='<tr><td>7B Scale Run</td><td style="color:#ffaa00;">HUNTING</td><td>v4-32 grabber active</td></tr>';
+html+='<tr><td>1.4B Scale Run</td><td style="color:#ffaa00;">ACTIVE</td><td>TPU v4-8 (lolm-no-ssm), Full Architecture</td></tr>';
+html+='<tr><td>Republic</td><td class="w">SUBMITTED</td><td>$250K equity crowdfunding (SAFE)</td></tr>';
+html+='<tr><td>Emergent Ventures</td><td class="w">SUBMITTED</td><td>Mercatus Center grant</td></tr>';
+html+='<tr><td>NVIDIA Inception</td><td class="w">SUBMITTED</td><td>Startup program application</td></tr>';
+html+='<tr><td>Wellfound</td><td style="color:#ffaa00;">PROFILE LIVE</td><td>AngelList startup presence</td></tr>';
 html+='</table></div>';
 
 // ═══════════════ CHAT ═══════════════
