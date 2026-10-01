@@ -30,6 +30,23 @@ export const DEMO_DEAL: DealSnapshot = {
   ],
 };
 
+const demoDeal = (opportunityId: string, stage: DealSnapshot["stage"], overrides: Partial<DealSnapshot> = {}): DealSnapshot => ({
+  ...DEMO_DEAL,
+  opportunityId,
+  stage,
+  evidence: DEMO_DEAL.evidence.map((item) => item.source === "close" ? { ...item, externalId: opportunityId, url: `https://close.example.test/opportunity/${opportunityId}` } : { ...item }),
+  ...overrides,
+});
+
+export const DEMO_DEALS: DealSnapshot[] = [
+  DEMO_DEAL,
+  demoDeal("demo-opp-reply", "Contacted", { nextAction: "Respond to the verified human reply" }),
+  demoDeal("demo-opp-meeting", "Replied", { nextAction: "Prepare meeting brief" }),
+  demoDeal("demo-opp-proposal", "Price Agreed", { nextAction: "Send verified proposal" }),
+  demoDeal("demo-opp-payment-link", "Contract Sent", { nextAction: "Send payment link" }),
+  demoDeal("demo-opp-claim", "Qualified", { nextAction: "Claim before first touch" }),
+];
+
 export const DEMO_PAYMENT: PaymentEvidence = {
   stripeAccountId: "acct_1TrCD18W7UytlyLE",
   paymentIntentId: "pi_demo_saguaro_001",
@@ -61,17 +78,20 @@ export const DEMO_JOB: PaidJobScope = {
 };
 
 const at = "2026-10-01T23:15:00-07:00";
-const base = (id: string) => ({ id, occurredAt: at, demo: true as const, evidence: DEMO_DEAL.evidence });
+const base = (id: string, actor = "ChatGPT Revenue OS") => ({ id, occurredAt: at, demo: true as const, actor, evidence: DEMO_DEAL.evidence });
 
 export const DEMO_EVENTS: Record<string, RevenueEvent> = {
-  "human-reply": { ...base("demo-human-reply-001"), type: "reply.received", source: "gmail", data: { deal: { ...DEMO_DEAL, stage: "Replied" }, classification: "human", excerpt: "The scope looks good. Can we start next week?" } },
-  autoresponder: { ...base("demo-autoresponder-001"), type: "reply.received", source: "gmail", data: { deal: { ...DEMO_DEAL, stage: "Contacted" }, classification: "autoresponder", excerpt: "Thanks for contacting us. We received your message." } },
-  meeting: { ...base("demo-meeting-001"), type: "meeting.booked", source: "calendly", data: { deal: { ...DEMO_DEAL, stage: "Meeting Booked", meetingAt: "2026-10-02T10:00:00-07:00" } } },
-  proposal: { ...base("demo-proposal-001"), type: "proposal.sent", source: "close", data: { deal: { ...DEMO_DEAL, stage: "Proposal Sent", nextAction: "Review proposal engagement and prepare follow-up" } } },
-  "payment-link": { ...base("demo-payment-link-001"), type: "payment.requested", source: "stripe", data: { deal: DEMO_DEAL } },
-  payment: { ...base("demo-payment-001"), type: "payment.succeeded", source: "stripe", data: { deal: DEMO_DEAL, payment: DEMO_PAYMENT, job: DEMO_JOB } },
-  "ambiguous-payment": { ...base("demo-payment-ambiguous-001"), type: "payment.succeeded", source: "stripe", data: { deal: DEMO_DEAL, payment: { ...DEMO_PAYMENT, attribution: "ambiguous" }, job: DEMO_JOB } },
-  blocker: { ...base("demo-blocker-001"), type: "blocker.observed", source: "gmail", data: { key: "gmail:sender-health:postal-footer", system: "Gmail", action: "Send first touch", exactFailure: "Required postal address footer is not configured", businessImpact: "Blocks all email first touches", revenueImpact: "No new outbound pipeline", owner: "Bryan", smallestFix: "Approve the Qira postal address and add it to the sender template", status: "Open", evidence: { label: "Run evidence", url: "https://airtable.example.test/run/demo-001", source: "airtable" } } },
-  status: { ...base("demo-status-001"), type: "run.status", source: "airtable", data: { revenueOsState: "paused", operators: [{ name: "ChatGPT", state: "maintenance", focus: "Revenue OS safety" }, { name: "Viktor", state: "reviewing", focus: "Command Center acceptance" }], lastSuccessfulRunAt: "2026-09-30T21:05:00-07:00", nextScheduledRunAt: "Paused pending verification", senderHealth: [{ mailbox: "Gmail", status: "caution" }, { mailbox: "Outlook", status: "unknown" }], counts: { qualified: 2, contacted: 80, replied: 1, meetings: 1, scoped: 0, proposal: 1, paymentPending: 1, won: 0, revenueCollectedCents: 0, currency: "USD", source: "close", asOf: at }, topBlockers: [{ key: "postal-footer", summary: "Postal footer is not approved", owner: "Bryan", status: "Open" }], integrations: [{ system: "close", status: "healthy", failureCount: 0, lastSuccessAt: at }, { system: "gmail", status: "caution", failureCount: 2, lastFailureAt: at }] } },
-  brief: { ...base("demo-brief-001"), type: "brief.requested", source: "airtable", data: { period: "Evening", asOf: at, moneyCollectedCents: 75_000, currency: "USD", humanReplies: 1, meetings: 1, dealsAdvanced: ["Saguaro Smiles → Proposal Sent"], proposalsOrPaymentRequests: ["Saguaro Smiles payment link sent"], followUpsDue: ["Saguaro Smiles tomorrow 09:00"], newPipeline: ["1 qualified dental practice"], lostOrSuppressed: ["3 autoresponders collapsed", "1 bounce counted"], blockers: ["Postal footer approval blocks new first touches"], viktorFocus: "Prepare the Saguaro Smiles kickoff and resolve sender footer", changed: true } },
+  "human-reply": { ...base("demo-human-reply-001", "System / Gmail"), type: "reply.received", source: "gmail", data: { deal: demoDeal("demo-opp-reply", "Contacted"), messageId: "gmail-demo-human-001", mailbox: "bryan@imagineqira.com", classification: "human", excerpt: "The scope looks good. Can we start next week?" } },
+  autoresponder: { ...base("demo-autoresponder-001", "System / Gmail"), type: "reply.received", source: "gmail", data: { deal: demoDeal("demo-opp-reply", "Contacted"), messageId: "gmail-demo-auto-001", mailbox: "bryan@imagineqira.com", classification: "autoresponder", excerpt: "Thanks for contacting us. We received your message." } },
+  bounce: { ...base("demo-bounce-001", "System / Gmail"), type: "reply.received", source: "gmail", data: { deal: demoDeal("demo-opp-reply", "Contacted"), messageId: "gmail-demo-bounce-001", mailbox: "bryan@imagineqira.com", classification: "bounce", excerpt: "550 address not found", senderHealthChanged: false } },
+  meeting: { ...base("demo-meeting-001", "System / Calendly"), type: "meeting.booked", source: "calendly", data: { deal: demoDeal("demo-opp-meeting", "Replied", { meetingAt: "2026-10-02T10:00:00-07:00" }) } },
+  proposal: { ...base("demo-proposal-001", "Viktor"), type: "proposal.sent", source: "close", data: { deal: demoDeal("demo-opp-proposal", "Price Agreed", { nextAction: "Review proposal engagement and prepare follow-up" }) } },
+  "payment-link": { ...base("demo-payment-link-001", "Viktor"), type: "payment.requested", source: "stripe", data: { deal: demoDeal("demo-opp-payment-link", "Contract Sent") } },
+  payment: { ...base("demo-payment-001", "System / Stripe"), type: "payment.succeeded", source: "stripe", data: { deal: DEMO_DEAL, payment: DEMO_PAYMENT, job: DEMO_JOB } },
+  "ambiguous-payment": { ...base("demo-payment-ambiguous-001", "System / Stripe"), type: "payment.succeeded", source: "stripe", data: { deal: DEMO_DEAL, payment: { ...DEMO_PAYMENT, paymentIntentId: "pi_demo_ambiguous_001", attribution: "ambiguous" }, job: DEMO_JOB } },
+  blocker: { ...base("demo-blocker-001", "ChatGPT Revenue OS"), type: "blocker.observed", source: "gmail", data: { key: "gmail:sender-health:postal-footer", system: "Gmail", action: "Send first touch", exactFailure: "Required postal address footer is not configured", businessImpact: "Blocks all email first touches", revenueImpact: "No new outbound pipeline", owner: "Bryan", smallestFix: "Approve the Qira postal address and add it to the sender template", status: "Open", evidence: { label: "Run evidence", url: "https://airtable.example.test/run/demo-001", source: "airtable" } } },
+  status: { ...base("demo-status-001"), type: "run.status", source: "airtable", data: { revenueOsState: "paused", operators: [{ name: "ChatGPT", state: "maintenance", focus: "Revenue OS safety" }, { name: "Viktor", state: "reviewing", focus: "Command Center acceptance" }], lastSuccessfulRunAt: "2026-09-30T21:05:00-07:00", nextScheduledRunAt: "Paused pending verification", senderHealth: [{ mailbox: "Gmail", status: "caution" }, { mailbox: "Outlook", status: "unknown" }], topBlockers: [{ key: "postal-footer", summary: "Postal footer is not approved", owner: "Bryan", status: "Open" }], integrations: [{ system: "close", status: "healthy", failureCount: 0, lastSuccessAt: at }, { system: "gmail", status: "caution", failureCount: 2, lastFailureAt: at }] } },
+  "run-start": { ...base("demo-run-start-001"), type: "run.started", source: "airtable", data: { summary: "Scheduled revenue sprint started", status: { revenueOsState: "running", runId: "DEMO-RUN-001", runAgeMinutes: 0, operators: [{ name: "ChatGPT", state: "running" }, { name: "Viktor", state: "idle" }], senderHealth: [{ mailbox: "Gmail", status: "healthy" }], topBlockers: [], integrations: [{ system: "close", status: "healthy", failureCount: 0 }] }, material: { humanReplies: 0, meetings: 0, payments: 0, newBlockers: 0, senderHealthChanged: false, stalledMinutes: 0 } } },
+  "run-end": { ...base("demo-run-end-001"), type: "run.ended", source: "airtable", data: { summary: "Scheduled sprint ended with no material change", status: { revenueOsState: "idle", runId: "DEMO-RUN-001", runAgeMinutes: 8, operators: [{ name: "ChatGPT", state: "idle" }, { name: "Viktor", state: "idle" }], senderHealth: [{ mailbox: "Gmail", status: "healthy" }], topBlockers: [], integrations: [{ system: "close", status: "healthy", failureCount: 0 }] }, material: { humanReplies: 0, meetings: 0, payments: 0, newBlockers: 0, senderHealthChanged: false, stalledMinutes: 0 } } },
+  brief: { ...base("demo-brief-001"), type: "brief.requested", source: "airtable", data: { period: "Evening", asOf: at, moneyCollectedCents: 75_000, currency: "USD", humanReplies: 1, meetings: 1, dealsAdvanced: ["Saguaro Smiles → Proposal Sent"], proposalsOrPaymentRequests: ["Saguaro Smiles payment link sent"], followUpsDue: ["Saguaro Smiles tomorrow 09:00"], newPipeline: ["1 qualified dental practice"], lostOrSuppressed: [], blockers: ["Postal footer approval blocks new first touches"], viktorFocus: "Prepare the Saguaro Smiles kickoff and resolve sender footer", changed: true } },
 };

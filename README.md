@@ -7,6 +7,7 @@ Phase 1 foundation is implemented on the `codex/slack-command-center` branch. Pr
 ## What Phase 1 provides
 
 - one persistent live Revenue OS status message, updated in place;
+- Close-sourced live pipeline counts with Phoenix timestamps;
 - high-signal human reply and meeting cards;
 - autoresponder and bounce suppression;
 - persistent deal cards with Close-first stage actions and no manual Won action;
@@ -15,6 +16,10 @@ Phase 1 foundation is implemented on the `codex/slack-command-center` branch. Pr
 - proposal, payment-request, payment-review, and `PAID JOB READY` cards;
 - material-change-only morning, afternoon, and evening briefs;
 - SQLite idempotency, message references, blocker state, ownership, and audit trail;
+- leased retry/recovery for failed or abandoned events;
+- Gmail message and Stripe PaymentIntent business-key deduplication;
+- run START/END aggregation into one daily thread;
+- durable autoresponder, bounce, and DSN tallies by period and mailbox;
 - a synthetic demo suite and HTTP demo endpoints;
 - Slack signature verification, bounded request bodies, and authenticated event ingestion.
 
@@ -67,19 +72,23 @@ The default transport prints exact Slack Block Kit payloads to stdout:
 
 ```bash
 npm run demo -- status
+npm run demo -- claim
 npm run demo -- human-reply
 npm run demo -- autoresponder
+npm run demo -- bounce
 npm run demo -- meeting
 npm run demo -- proposal
 npm run demo -- payment-link
 npm run demo -- payment
 npm run demo -- ambiguous-payment
 npm run demo -- blocker
+npm run demo -- run-start
+npm run demo -- run-end
 npm run demo -- brief
 npm run demo -- all
 ```
 
-`payment` automatically replays the same event to prove duplicate suppression. `blocker` sends a second observation with a new event ID to prove the card updates rather than reposts.
+`payment` replays the same PaymentIntent under a different ingestion event ID. `human-reply` does the same for a Gmail message ID. `blocker` sends a second observation to prove the card updates rather than reposts. Every rendered demo message has an Actor line and an unmistakable DEMO watermark.
 
 To render synthetic cards in one private Slack acceptance channel:
 
@@ -124,18 +133,21 @@ The server verifies Slack's `v0` HMAC signature and rejects requests older than 
 | `SLACK_SIGNING_SECRET` | production | verifies Slack requests |
 | `QIRA_INGEST_TOKEN` | production | bearer token for internal `/events` ingestion |
 | `DEMO_SLACK_CHANNEL_ID` | live demo | single private destination for all demo cards |
+| `SLACK_WORKSPACE_URL` | yes | base workspace URL used for persistent deal-home links |
 | `SLACK_*_CHANNEL_ID` | production | existing Revenue OS channel IDs |
 
 ## Production safety rules
 
 1. Slack renders and coordinates; it does not become canonical pipeline or payment state.
 2. Stage actions compare the expected Close stage, write Close, read back, and then refresh Slack.
-3. A Slack button can never set `Won`.
-4. Payment handling rejects the wrong account, non-succeeded status, ambiguous attribution, unknown deposit/full status, unknown recurring status, missing scope, missing deliverables, and missing fulfillment owner.
-5. Claims use normalized root domains and a unique SQLite key. Both Gmail and Close dedupe evidence must be clear.
-6. Demo records must use `.test` email, company, and evidence domains.
-7. Buttons may open or draft; no Phase 1 button sends customer communication.
-8. Secrets are environment-only and are never included in logs or health output.
+3. Verified human Gmail replies move `Contacted → Replied` in Close once; autoresponders, bounces, and DSNs never move the stage.
+4. A Slack button can never set `Won`.
+5. Payment handling rejects the wrong account, non-succeeded status, ambiguous attribution, unknown deposit/full status, unknown recurring status, missing scope, missing deliverables, and missing fulfillment owner.
+6. A verified payment and Close Won remain true if monday fails; the service emits `FULFILLMENT HANDOFF FAILED` and retries the idempotent handoff.
+7. Claims use normalized root domains and a unique SQLite key. Both Gmail and Close dedupe evidence must be clear.
+8. Demo records must use `.test` email, company, and evidence domains.
+9. Buttons may open or draft; no Phase 1 button sends customer communication.
+10. Secrets are environment-only and are never included in logs or health output.
 
 ## Deployment
 

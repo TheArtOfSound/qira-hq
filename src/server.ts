@@ -38,10 +38,10 @@ async function readBody(req: IncomingMessage, maxBytes = 1_000_000): Promise<str
 
 function parseEvent(raw: string): RevenueEvent {
   const value = JSON.parse(raw) as Partial<RevenueEvent>;
-  if (!value || typeof value !== "object" || typeof value.id !== "string" || typeof value.type !== "string" || typeof value.occurredAt !== "string" || typeof value.source !== "string" || typeof value.demo !== "boolean" || !("data" in value)) {
+  if (!value || typeof value !== "object" || typeof value.id !== "string" || typeof value.type !== "string" || typeof value.occurredAt !== "string" || typeof value.source !== "string" || typeof value.actor !== "string" || typeof value.demo !== "boolean" || !("data" in value)) {
     throw new Error("Invalid revenue event envelope");
   }
-  const allowed = new Set(["reply.received", "meeting.booked", "deal.updated", "proposal.sent", "payment.requested", "payment.succeeded", "blocker.observed", "run.status", "brief.requested"]);
+  const allowed = new Set(["reply.received", "meeting.booked", "deal.updated", "proposal.sent", "payment.requested", "payment.succeeded", "blocker.observed", "run.status", "run.started", "run.ended", "brief.requested"]);
   if (!allowed.has(value.type)) throw new Error("Unsupported revenue event type");
   if (config.demoMode && value.demo !== true) throw new Error("DEMO_MODE accepts synthetic demo events only");
   return value as RevenueEvent;
@@ -51,12 +51,13 @@ async function handleSlackAction(raw: string): Promise<string> {
   const payloadRaw = new URLSearchParams(raw).get("payload");
   if (!payloadRaw) throw new Error("Missing Slack interaction payload");
   const payload = JSON.parse(payloadRaw) as {
-    user?: { id?: string };
+    user?: { id?: string; username?: string; name?: string };
     actions?: Array<{ action_id?: string; value?: string }>;
   };
-  const actor = payload.user?.id;
+  const actorId = payload.user?.id;
+  const actor = payload.user?.username ?? payload.user?.name ?? actorId;
   const action = payload.actions?.[0];
-  if (!actor || !action?.action_id || !action.value) throw new Error("Malformed Slack interaction payload");
+  if (!actorId || !actor || !action?.action_id || !action.value) throw new Error("Malformed Slack interaction payload");
   const value = JSON.parse(action.value) as { opportunityId?: string; rootDomain?: string; to?: SalesStage };
   if (action.action_id === "claim_prospect" && value.opportunityId) {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -67,11 +68,11 @@ async function handleSlackAction(raw: string): Promise<string> {
     return center.releaseProspect(value.rootDomain, actor) ? "Prospect released." : "Release rejected. Only the current owner can release this prospect.";
   }
   if (action.action_id === "advance_stage" && value.opportunityId && value.to) {
-    const result = await center.advanceStage(value.opportunityId, value.to, actor);
+    const result = await center.advanceStage(value.opportunityId, value.to, actor, config.demoMode);
     return `Close confirmed ${result.company} → ${result.stage}. Slack card refreshed.`;
   }
   if (action.action_id === "mark_lost" && value.opportunityId) {
-    const result = await center.advanceStage(value.opportunityId, "Lost", actor);
+    const result = await center.advanceStage(value.opportunityId, "Lost", actor, config.demoMode);
     return `Close confirmed ${result.company} → Lost. Slack card refreshed.`;
   }
   if (action.action_id === "raise_blocker") return "Use the blocker intake endpoint with exact failure evidence; no incomplete blocker was created.";
@@ -85,13 +86,18 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, mode: config.demoMode ? "demo" : "production", database: "available", adapters: config.demoMode ? "synthetic" : "fail-closed pending configuration" });
     }
     if (req.method === "GET" && url.pathname === "/demo/scenarios") {
-      return json(res, 200, { enabled: config.demoMode, scenarios: config.demoMode ? Object.keys(DEMO_EVENTS) : [] });
+      return json(res, 200, { enabled: config.demoMode, scenarios: config.demoMode ? ["claim", ...Object.keys(DEMO_EVENTS)] : [] });
     }
     if (req.method === "POST" && url.pathname.startsWith("/demo/")) {
       if (!config.demoMode) return json(res, 404, { error: "Demo mode disabled" });
       const name = decodeURIComponent(url.pathname.slice("/demo/".length));
+      if (name === "claim") {
+        const first = await center.claimProspect("demo-opp-claim", "Viktor", new Date(Date.now() + 86_400_000).toISOString());
+        const collision = await center.claimProspect("demo-opp-claim", "ChatGPT", new Date(Date.now() + 86_400_000).toISOString());
+        return json(res, 200, { first, collision });
+      }
       const event = DEMO_EVENTS[name];
-      if (!event) return json(res, 404, { error: "Unknown demo scenario", scenarios: Object.keys(DEMO_EVENTS) });
+      if (!event) return json(res, 404, { error: "Unknown demo scenario", scenarios: ["claim", ...Object.keys(DEMO_EVENTS)] });
       return json(res, 200, await center.handleEvent(structuredClone(event)));
     }
     if (req.method === "POST" && url.pathname === "/events") {

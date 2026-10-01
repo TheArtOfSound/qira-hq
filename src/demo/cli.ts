@@ -25,19 +25,34 @@ const store = new CommandCenterStore(":memory:");
 const slack = postToSlack ? new HttpSlackClient(config.slackBotToken ?? "") : new StdoutSlackClient();
 const center = new CommandCenter(store, slack, demoAdapters(), config);
 
-const names = scenario === "all" ? Object.keys(DEMO_EVENTS) : [scenario];
+const available = ["claim", ...Object.keys(DEMO_EVENTS)];
+const names = scenario === "all" ? available : [scenario];
 for (const name of names) {
+  if (name === "claim") {
+    const first = await center.claimProspect("demo-opp-claim", "Viktor", "2026-10-02T23:15:00-07:00");
+    const collision = await center.claimProspect("demo-opp-claim", "ChatGPT", "2026-10-02T23:15:00-07:00");
+    process.stdout.write(`${JSON.stringify({ scenario: name, first, collision })}\n`);
+    continue;
+  }
   const event = DEMO_EVENTS[name];
   if (!event) {
-    process.stderr.write(`Unknown demo scenario: ${name}\nAvailable: ${Object.keys(DEMO_EVENTS).join(", ")}, all\n`);
+    process.stderr.write(`Unknown demo scenario: ${name}\nAvailable: ${available.join(", ")}, all\n`);
     process.exitCode = 2;
     break;
   }
   const result = await center.handleEvent(structuredClone(event));
   process.stdout.write(`${JSON.stringify({ scenario: name, result })}\n`);
   if (name === "payment") {
-    const replay = await center.handleEvent(structuredClone(event));
+    const duplicate = structuredClone(event);
+    duplicate.id = `${event.id}-different-ingestion-id`;
+    const replay = await center.handleEvent(duplicate);
     process.stdout.write(`${JSON.stringify({ scenario: "duplicate-payment-replay", result: replay })}\n`);
+  }
+  if (name === "human-reply") {
+    const duplicate = structuredClone(event);
+    duplicate.id = `${event.id}-different-ingestion-id`;
+    const replay = await center.handleEvent(duplicate);
+    process.stdout.write(`${JSON.stringify({ scenario: "duplicate-gmail-message", result: replay })}\n`);
   }
   if (name === "blocker") {
     const repeat = structuredClone(event);

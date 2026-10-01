@@ -25,6 +25,15 @@ export interface SurfaceRef {
   messageTs: string;
 }
 
+export interface PaymentRecord {
+  paymentIntentId: string;
+  opportunityId: string;
+  closeWonAt?: string;
+  fulfillmentStatus: "pending" | "failed" | "completed";
+  fulfillmentJson?: unknown;
+  lastError?: string;
+}
+
 export class CommandCenterStore {
   readonly db: DatabaseSync;
 
@@ -47,7 +56,9 @@ export class CommandCenterStore {
         status TEXT NOT NULL CHECK(status IN ('processing','processed','failed')),
         result TEXT,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        lease_expires_at TEXT,
+        attempts INTEGER NOT NULL DEFAULT 1
       );
       CREATE TABLE IF NOT EXISTS ownership (
         root_domain TEXT PRIMARY KEY,
@@ -87,20 +98,129 @@ export class CommandCenterStore {
         updated_at TEXT NOT NULL,
         PRIMARY KEY(surface_kind, entity_id)
       );
+      CREATE TABLE IF NOT EXISTS business_actions (
+        action_key TEXT PRIMARY KEY,
+        action_kind TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('processing','completed','failed')),
+        result_json TEXT,
+        updated_at TEXT NOT NULL,
+        lease_expires_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS payment_handoffs (
+        payment_intent_id TEXT PRIMARY KEY,
+        opportunity_id TEXT NOT NULL,
+        close_won_at TEXT,
+        fulfillment_status TEXT NOT NULL CHECK(fulfillment_status IN ('pending','failed','completed')),
+        fulfillment_json TEXT,
+        last_error TEXT,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS suppression_tallies (
+        period TEXT NOT NULL,
+        mailbox TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK(kind IN ('autoresponder','bounce','dsn')),
+        count INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(period,mailbox,kind)
+      );
     `);
+    this.ensureColumn("events", "lease_expires_at", "TEXT");
+    this.ensureColumn("events", "attempts", "INTEGER NOT NULL DEFAULT 1");
+    this.ensureColumn("business_actions", "lease_expires_at", "TEXT");
   }
 
-  beginEvent(eventId: string, eventType: string, now = new Date().toISOString()): boolean {
+  private ensureColumn(table: string, column: string, definition: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!columns.some((item) => item.name === column)) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+
+  beginEvent(eventId: string, eventType: string, now = new Date().toISOString(), leaseSeconds = 60): boolean {
+    const leaseExpiresAt = new Date(Date.parse(now) + leaseSeconds * 1_000).toISOString();
     const result = this.db.prepare(`
-      INSERT INTO events(event_id,event_type,status,created_at,updated_at)
-      VALUES(?,?,'processing',?,?) ON CONFLICT(event_id) DO NOTHING
-    `).run(eventId, eventType, now, now);
+      INSERT INTO events(event_id,event_type,status,created_at,updated_at,lease_expires_at,attempts)
+      VALUES(?,?,'processing',?,?,?,1)
+      ON CONFLICT(event_id) DO UPDATE SET
+        status='processing', updated_at=excluded.updated_at,
+        lease_expires_at=excluded.lease_expires_at, attempts=events.attempts+1
+      WHERE events.status='failed' OR (events.status='processing' AND events.lease_expires_at <= excluded.updated_at)
+    `).run(eventId, eventType, now, now, leaseExpiresAt);
     return result.changes === 1;
   }
 
   finishEvent(eventId: string, status: "processed" | "failed", result: unknown, now = new Date().toISOString()): void {
-    this.db.prepare("UPDATE events SET status=?, result=?, updated_at=? WHERE event_id=?")
+    this.db.prepare("UPDATE events SET status=?, result=?, updated_at=?, lease_expires_at=NULL WHERE event_id=?")
       .run(status, JSON.stringify(result), now, eventId);
+  }
+
+  getEvent(eventId: string): { status: string; attempts: number; leaseExpiresAt?: string } | undefined {
+    const row = this.db.prepare("SELECT status,attempts,lease_expires_at FROM events WHERE event_id=?").get(eventId) as { status: string; attempts: number; lease_expires_at: string | null } | undefined;
+    return row ? { status: row.status, attempts: row.attempts, ...(row.lease_expires_at ? { leaseExpiresAt: row.lease_expires_at } : {}) } : undefined;
+  }
+
+  beginBusinessAction(key: string, kind: string, entityId: string, now = new Date().toISOString(), leaseSeconds = 60): "started" | "completed" | "active" {
+    const existing = this.db.prepare("SELECT status,lease_expires_at FROM business_actions WHERE action_key=?").get(key) as { status: string; lease_expires_at: string | null } | undefined;
+    if (existing?.status === "completed") return "completed";
+    if (existing?.status === "processing" && existing.lease_expires_at && existing.lease_expires_at > now) return "active";
+    const leaseExpiresAt = new Date(Date.parse(now) + leaseSeconds * 1_000).toISOString();
+    const result = this.db.prepare(`
+      INSERT INTO business_actions(action_key,action_kind,entity_id,status,updated_at,lease_expires_at)
+      VALUES(?,?,?,'processing',?,?) ON CONFLICT(action_key) DO UPDATE SET
+        status='processing',updated_at=excluded.updated_at,lease_expires_at=excluded.lease_expires_at
+      WHERE business_actions.status='failed' OR business_actions.lease_expires_at <= excluded.updated_at
+    `).run(key, kind, entityId, now, leaseExpiresAt);
+    return result.changes === 1 ? "started" : "active";
+  }
+
+  finishBusinessAction(key: string, status: "completed" | "failed", result: unknown, now = new Date().toISOString()): void {
+    this.db.prepare("UPDATE business_actions SET status=?,result_json=?,updated_at=?,lease_expires_at=NULL WHERE action_key=?")
+      .run(status, JSON.stringify(result), now, key);
+  }
+
+  claimPayment(paymentIntentId: string, opportunityId: string, now = new Date().toISOString()): { isNew: boolean; conflict: boolean; record: PaymentRecord } {
+    const result = this.db.prepare(`
+      INSERT INTO payment_handoffs(payment_intent_id,opportunity_id,fulfillment_status,updated_at)
+      VALUES(?,?,'pending',?) ON CONFLICT(payment_intent_id) DO NOTHING
+    `).run(paymentIntentId, opportunityId, now);
+    const record = this.getPayment(paymentIntentId);
+    if (!record) throw new Error("Payment handoff record could not be loaded");
+    return { isNew: result.changes === 1, conflict: record.opportunityId !== opportunityId, record };
+  }
+
+  getPayment(paymentIntentId: string): PaymentRecord | undefined {
+    const row = this.db.prepare("SELECT * FROM payment_handoffs WHERE payment_intent_id=?").get(paymentIntentId) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      paymentIntentId: String(row.payment_intent_id), opportunityId: String(row.opportunity_id),
+      fulfillmentStatus: String(row.fulfillment_status) as PaymentRecord["fulfillmentStatus"],
+      ...(row.close_won_at ? { closeWonAt: String(row.close_won_at) } : {}),
+      ...(row.fulfillment_json ? { fulfillmentJson: JSON.parse(String(row.fulfillment_json)) } : {}),
+      ...(row.last_error ? { lastError: String(row.last_error) } : {}),
+    };
+  }
+
+  markPaymentWon(paymentIntentId: string, now = new Date().toISOString()): void {
+    this.db.prepare("UPDATE payment_handoffs SET close_won_at=COALESCE(close_won_at,?),updated_at=? WHERE payment_intent_id=?")
+      .run(now, now, paymentIntentId);
+  }
+
+  markFulfillment(paymentIntentId: string, status: "failed" | "completed", result: unknown, now = new Date().toISOString()): void {
+    this.db.prepare("UPDATE payment_handoffs SET fulfillment_status=?,fulfillment_json=?,last_error=?,updated_at=? WHERE payment_intent_id=?")
+      .run(status, status === "completed" ? JSON.stringify(result) : null, status === "failed" ? String(result) : null, now, paymentIntentId);
+  }
+
+  incrementSuppression(period: string, mailbox: string, kind: "autoresponder" | "bounce" | "dsn", now = new Date().toISOString()): void {
+    this.db.prepare(`
+      INSERT INTO suppression_tallies(period,mailbox,kind,count,updated_at) VALUES(?,?,?,1,?)
+      ON CONFLICT(period,mailbox,kind) DO UPDATE SET count=suppression_tallies.count+1,updated_at=excluded.updated_at
+    `).run(period, mailbox, kind, now);
+  }
+
+  getSuppressionTotals(period: string): Record<"autoresponder" | "bounce" | "dsn", number> {
+    const totals = { autoresponder: 0, bounce: 0, dsn: 0 };
+    const rows = this.db.prepare("SELECT kind,SUM(count) AS count FROM suppression_tallies WHERE period=? GROUP BY kind").all(period) as Array<{ kind: keyof typeof totals; count: number }>;
+    for (const row of rows) totals[row.kind] = Number(row.count);
+    return totals;
   }
 
   eventCount(): number {

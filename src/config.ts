@@ -17,6 +17,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databasePath: env.DATABASE_PATH ?? "data/qira-command-center.sqlite",
     demoMode,
     stripeAccountId: env.QIRA_STRIPE_ACCOUNT_ID ?? "acct_1TrCD18W7UytlyLE",
+    slackWorkspaceUrl: env.SLACK_WORKSPACE_URL ?? "https://qira-global.slack.com",
     channels: {
       control: env.SLACK_CONTROL_CHANNEL_ID ?? "demo-control",
       replies: env.SLACK_REPLIES_CHANNEL_ID ?? "demo-replies",

@@ -1,10 +1,10 @@
 import type { CloseAdapter, DedupeAdapter, FulfillmentAdapter, RevenueAdapters } from "../adapters/interfaces.js";
 import { assertStageTransition, normalizeRootDomain } from "../domain/safety.js";
-import type { DealSnapshot, DedupeEvidence, FulfillmentResult, PaidJobScope, PaymentEvidence, SalesStage } from "../domain/types.js";
-import { DEMO_DEAL } from "./fixtures.js";
+import type { DealSnapshot, DedupeEvidence, FulfillmentResult, PaidJobScope, PaymentEvidence, PipelineCounts, SalesStage } from "../domain/types.js";
+import { DEMO_DEALS } from "./fixtures.js";
 
 export class DemoCloseAdapter implements CloseAdapter {
-  readonly deals = new Map<string, DealSnapshot>([[DEMO_DEAL.opportunityId, { ...DEMO_DEAL }]]);
+  readonly deals = new Map<string, DealSnapshot>(DEMO_DEALS.map((deal) => [deal.opportunityId, structuredClone(deal)]));
 
   async getOpportunity(opportunityId: string): Promise<DealSnapshot> {
     const deal = this.deals.get(opportunityId);
@@ -19,6 +19,18 @@ export class DemoCloseAdapter implements CloseAdapter {
     const updated = { ...deal, stage: next };
     this.deals.set(opportunityId, updated);
     return structuredClone(updated);
+  }
+
+  async getPipelineCounts(): Promise<PipelineCounts> {
+    const values = [...this.deals.values()];
+    const count = (...stages: SalesStage[]) => values.filter((deal) => stages.includes(deal.stage)).length;
+    return {
+      qualified: count("Qualified"), contacted: count("Contacted"), replied: count("Replied"), meetings: count("Meeting Booked"),
+      scoped: count("Scope Negotiation", "Price Agreed"), proposal: count("Proposal Sent", "Contract Sent"),
+      paymentPending: count("Payment Link Sent"), won: count("Won", "Fulfillment Handoff"),
+      revenueCollectedCents: values.filter((deal) => deal.stage === "Won" || deal.stage === "Fulfillment Handoff").reduce((sum, deal) => sum + (deal.expectedValueCents ?? 0), 0),
+      currency: "USD", source: "close", asOf: new Date().toISOString(),
+    };
   }
 }
 

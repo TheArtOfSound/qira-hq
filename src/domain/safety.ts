@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { DealSnapshot, PaymentEvidence, SalesStage } from "./types.js";
+import type { DealSnapshot, EvidenceLink, PaymentEvidence, RevenueEvent, SalesStage } from "./types.js";
 
 const ORDERED_STAGES: SalesStage[] = [
   "Qualified",
@@ -76,9 +76,23 @@ export function assertDemoDeal(deal: DealSnapshot): void {
   if (!normalizeRootDomain(deal.rootDomain).endsWith(".test")) {
     throw new SafetyError("DEMO records must use a reserved .test company domain");
   }
-  for (const evidence of deal.evidence) {
+  assertDemoEvidence(deal.evidence);
+}
+
+export function assertDemoEvidence(items: EvidenceLink[]): void {
+  for (const evidence of items) {
     const host = new URL(evidence.url).hostname;
     if (!host.endsWith(".test")) throw new SafetyError("DEMO evidence links must use .test hosts");
+  }
+}
+
+export function assertDemoEvent(event: RevenueEvent): void {
+  assertDemoEvidence(event.evidence);
+  if ("deal" in event.data) assertDemoDeal(event.data.deal);
+  if (event.type === "blocker.observed") assertDemoEvidence([event.data.evidence]);
+  if (event.type === "payment.succeeded") {
+    assertDemoEvidence([{ label: "Stripe", url: event.data.payment.dashboardUrl, source: "stripe" }]);
+    if (event.data.job.agreementEvidence) assertDemoEvidence([event.data.job.agreementEvidence]);
   }
 }
 

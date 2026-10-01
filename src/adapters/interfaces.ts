@@ -4,6 +4,7 @@ import type {
   FulfillmentResult,
   PaidJobScope,
   PaymentEvidence,
+  PipelineCounts,
   SalesStage,
 } from "../domain/types.js";
 
@@ -14,6 +15,7 @@ export interface DedupeAdapter {
 export interface CloseAdapter {
   getOpportunity(opportunityId: string): Promise<DealSnapshot>;
   transitionStage(opportunityId: string, expectedCurrent: SalesStage, next: SalesStage): Promise<DealSnapshot>;
+  getPipelineCounts(): Promise<PipelineCounts>;
 }
 
 export interface FulfillmentAdapter {
@@ -36,7 +38,7 @@ export function unconfiguredAdapters(): RevenueAdapters {
   };
   return {
     dedupe: { check: fail },
-    close: { getOpportunity: fail, transitionStage: fail },
+    close: { getOpportunity: fail, transitionStage: fail, getPipelineCounts: fail },
     fulfillment: { createOrGetPaidJob: fail },
   };
 }

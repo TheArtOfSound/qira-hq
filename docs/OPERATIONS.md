@@ -8,6 +8,8 @@
 
 The SQLite database is the durable control plane for idempotency, ownership, blocker aggregation, audit entries, and Slack surface references. Stop the process or use SQLite's online backup API before copying it. Retain at least one verified restore point before schema or deployment changes.
 
+Event rows use bounded processing leases. A failed event may retry immediately; an abandoned `processing` row may be reclaimed only after its lease expires. Gmail message IDs and Stripe PaymentIntent IDs provide the business-level dedupe boundary when ingestion event IDs differ.
+
 ## Incident priorities
 
 1. Disable inbound event delivery if customer-impacting mutations are suspected.
@@ -20,10 +22,12 @@ The SQLite database is the durable control plane for idempotency, ownership, blo
 ## Noise policy
 
 - Run start/end updates the status surface; no top-level heartbeat.
+- Run lifecycle detail is appended beneath one daily run-log parent.
 - A stalled run posts only after the configured threshold and only once per blocker key.
 - Autoresponders, bounces, and DSNs are counted; they post only when sender health changes.
 - Repeated blockers update the existing card.
 - Unchanged briefs are suppressed.
+- Briefs are capped at 12 Block Kit blocks including Actor/DEMO context.
 
 ## Production enablement gate
 

@@ -38,3 +38,19 @@ test("blocker repeats aggregate without duplicate records", () => {
   assert.equal(store.blockerCount(), 1);
   store.close();
 });
+
+test("failed events retry, stale processing is reclaimed, and active processing is suppressed", () => {
+  const store = new CommandCenterStore(":memory:");
+  assert.equal(store.beginEvent("failed", "reply.received", "2026-10-01T00:00:00Z", 60), true);
+  store.finishEvent("failed", "failed", { error: "transient" }, "2026-10-01T00:00:10Z");
+  assert.equal(store.beginEvent("failed", "reply.received", "2026-10-01T00:00:20Z", 60), true);
+
+  assert.equal(store.beginEvent("stale", "reply.received", "2026-10-01T00:00:00Z", 60), true);
+  assert.equal(store.beginEvent("stale", "reply.received", "2026-10-01T00:02:00Z", 60), true);
+  assert.equal(store.getEvent("stale")?.attempts, 2);
+
+  assert.equal(store.beginEvent("active", "reply.received", "2026-10-01T00:00:00Z", 60), true);
+  assert.equal(store.beginEvent("active", "reply.received", "2026-10-01T00:00:30Z", 60), false);
+  assert.equal(store.getEvent("active")?.attempts, 1);
+  store.close();
+});

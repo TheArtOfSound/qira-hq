@@ -153,25 +153,45 @@ export interface RevenueBrief {
   changed: boolean;
 }
 
+export type StatusInput = Omit<LiveStatus, "counts">;
+
+export interface RunMaterialOutcome {
+  humanReplies: number;
+  meetings: number;
+  payments: number;
+  newBlockers: number;
+  senderHealthChanged: boolean;
+  stalledMinutes: number;
+}
+
+export interface RunLifecycle {
+  status: StatusInput;
+  summary: string;
+  material: RunMaterialOutcome;
+}
+
 interface BaseEvent<T extends string, D> {
   id: string;
   type: T;
   occurredAt: string;
   source: SourceSystem;
   demo: boolean;
+  actor: string;
   evidence: EvidenceLink[];
   data: D;
 }
 
 export type RevenueEvent =
-  | BaseEvent<"reply.received", { deal: DealSnapshot; classification: "human" | "autoresponder" | "bounce" | "unknown"; excerpt: string }>
+  | BaseEvent<"reply.received", { deal: DealSnapshot; messageId: string; mailbox: string; classification: "human" | "autoresponder" | "bounce" | "dsn" | "unknown"; excerpt: string; senderHealthChanged?: boolean }>
   | BaseEvent<"meeting.booked", { deal: DealSnapshot }>
   | BaseEvent<"deal.updated", { deal: DealSnapshot; changed: string }>
   | BaseEvent<"proposal.sent", { deal: DealSnapshot }>
   | BaseEvent<"payment.requested", { deal: DealSnapshot }>
   | BaseEvent<"payment.succeeded", { deal: DealSnapshot; payment: PaymentEvidence; job: PaidJobScope }>
   | BaseEvent<"blocker.observed", BlockerInput>
-  | BaseEvent<"run.status", LiveStatus>
+  | BaseEvent<"run.status", StatusInput>
+  | BaseEvent<"run.started", RunLifecycle>
+  | BaseEvent<"run.ended", RunLifecycle>
   | BaseEvent<"brief.requested", RevenueBrief>;
 
 export interface DedupeEvidence {
