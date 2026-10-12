@@ -18,3 +18,11 @@ jobs:
         run: cp experiments/qira-collab/worker.js /tmp/qira-collab-worker.mjs && node --check /tmp/qira-collab-worker.mjs
       - name: MCP and authentication contract
         run: node --test experiments/qira-collab/worker.test.mjs
+
+      - name: Public deployment health
+        run: |
+          curl --fail --silent --show-error --retry 2 --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/health | grep '"ok":true'
+      - name: Unauthorized access must fail closed
+        run: |
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/api/projects)
+          test "$code" = "401"
