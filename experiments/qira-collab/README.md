@@ -19,7 +19,7 @@ npx wrangler secret put BOOTSTRAP_TOKEN --name qira-collab-dev
 ```
 Use a new unique high-entropy private token. Keep it out of the repository. The secret must be bound to this same script. After adding the secret, test auth and create a project via UI at the workers.dev URL. Note that the developer chat created a private token file locally, but rotating/generating a fresh token in a private shell is preferable.
 
-The live deployment API returned HTTP 200 and 100% version deployment with a D1 binding. External health URL could not be fetched from this assistant runtime, so public HTTP accessibility is **not verified**.
+The live deployment API returned HTTP 200 and 100% version deployment with a D1 binding. External health URL could not be fetched from this assistant runtime (outbound requests to this workers.dev host are blocked by the tools' network policy), so public HTTP accessibility is **not verified**.
 
 ## Smoke checks
 ```powershell
@@ -32,10 +32,31 @@ Invoke-RestMethod -Uri "$base/api/projects" -Headers @{Authorization="Bearer $to
 ```
 Create project via web UI; issue one project `editor` token for each collaborator. Token values are shown only once. Test REST and MCP with the same bearer tokens. Revoke tokens in `GET/DELETE /api/projects/:project_id/tokens/:token_hash` if compromised.
 
+## Agent connection after activation
+
+With a separately issued project editor token in the local shell environment:
+
+```powershell
+$env:QIRA_COLLAB_TOKEN = Read-Host "Paste project token"
+codex mcp add qira-collab --url https://qira-collab-dev.bryanleonard237.workers.dev/mcp --bearer-token-env-var QIRA_COLLAB_TOKEN
+```
+
+The environment variable must be available to the Codex process when it starts. Each collaborator must have a distinct project-scoped token; never use the Cloudflare bootstrap/admin token in Codex.
+
+After activating the secret, verify via the live smoke harness:
+
+```powershell
+$env:QIRA_COLLAB_ADMIN_TOKEN = Read-Host "Admin token"
+$env:QIRA_COLLAB_SMOKE_WRITE = "yes"
+node experiments/qira-collab/smoke.mjs
+```
+
+The write test creates audit-named test projects and credentials, revokes its viewer test credential, and **never** modifies preexisting projects.
+
 ## MCP tools
 `list_projects`, `get_project`, `list_tasks`, `create_task`, `update_task`, `list_messages`, `post_message`, `list_documents`, `create_document`, `update_document`, `get_activity`.
 
-`POST /mcp` supports JSON-RPC `initialize`, `notifications/initialized`, `ping`, `tools/list`, and `tools/call` using stateless JSON responses. It requires `Authorization: Bearer <project token>`. Codex supports remote HTTP MCP; configure bearer token using its supported environment-driven custom headers rather than storing secrets in plaintext in a repository. Use the latest Codex docs and verify supported config keys before applying them.
+`POST /mcp` supports JSON-RPC `initialize`, `notifications/initialized`, `ping`, `tools/list`, and `tools/call` using stateless JSON responses. It requires `Authorization: Bearer <project token>`. Codex supports remote HTTP MCP using `--bearer-token-env-var` as shown above. Never commit token values.
 
 **Consumer ChatGPT:** native custom MCP connection may require an OAuth 2.1 identity / authorization flow, verification, and user action. Not built; do not claim that ChatGPT account connection works until it has actually been tested.
 
