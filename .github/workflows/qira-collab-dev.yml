@@ -1,0 +1,20 @@
+name: Qira Collab Worker checks
+on:
+  push:
+    branches: [feature/collabhub-cloudflare-dev-20261012]
+    paths:
+      - 'experiments/qira-collab/**'
+      - '.github/workflows/qira-collab-dev.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: cp experiments/qira-collab/worker.js /tmp/qira-collab-worker.mjs && node --check /tmp/qira-collab-worker.mjs
+      - name: MCP and authentication contract
+        run: node --test experiments/qira-collab/worker.test.mjs
