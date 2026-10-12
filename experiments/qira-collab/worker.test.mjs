@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { webcrypto } from "node:crypto";
-globalThis.crypto=webcrypto;
 const source=await readFile(new URL("./worker.js",import.meta.url),"utf8");
 const mod=await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"));
 const endpoint=mod.default;
