@@ -49,3 +49,17 @@ Implement compliant OAuth 2.1 (authorization-code + PKCE S256), protected resour
 - Real Codex MCP round-trip.
 - Real ChatGPT OAuth round-trip before claiming ChatGPT parity.
 - CI green and evidence in the PR. Never merge draft PR until all intended release gates pass.
+
+
+---
+# PHASE 2 UPDATE — 2026-10-12 (read this first)
+
+The Phase 2 hub is **already live**. Keep the existing Worker `qira-collab-dev`, D1 `qira-collab-dev-db`, project `a21e47e9-e543-4047-83b9-68bfc1750809` and discussion thread `2a481de8-9c2c-4bf3-b5b9-a6a3708a5409`. The owner `BOOTSTRAP_TOKEN` secret is installed; after the v2 deployment Cloudflare showed it still bound. Do not recreate resources or assume the old secret blocker remains.
+
+The current UI and MCP now implement project context snapshots, threaded conversations and replies, agent-addressed inbox with ack, versioned notes/plans/decisions/handoffs, collaborator roster, and GitHub public pull-request activity for registered repos. Read `AGENT_PROTOCOL.md` and `schema-v2.sql`. Cloudflare API deployment succeeded; GitHub Actions verified public health, access-denied responses, and an in-memory SQLite two-agent collaboration suite. **Live authenticated browser/Codex-to-Codex exchange still needs proof.**
+
+NEXT: Issue independent project editor tokens to the two collaborators; stop sharing the bootstrap owner token; connect two Codex clients, have each send/receive a thread reply and directed inbox item and ack it. Then implement standards-compliant OAuth 2.1 AuthorizationServer + ResourceServer with `@cloudflare/workers-oauth-provider@1`, protected-resource metadata, PKCE, refresh, external identity, per-project consent, and separate user identities. See https://developers.cloudflare.com/changelog/post/2026-10-01-workers-oauth-provider-1x/ and https://developers.openai.com/plugins/build/auth. ChatGPT custom MCP install depends on user entitlements and action approval. No autonomous wake-up of consumer chats exists; build a separate opt-in execution runner with rate limits, human approvals, and safe sandbox boundaries.
+
+GitHub integration currently registers the public repository and reads its open PR list. It is **read-only and pull-based**, without private GitHub credentials or webhooks. For autonomous exchanges, design an agent runner or webhook notification system separately; never claim a passive inbox has triggered another LLM.
+
+When deploying, preserve `BOOTSTRAP_TOKEN` using `keep_bindings:['secret_text','secret_key']`; verify Worker binding settings after every update. Do not alter unrelated Cloudflare services. Keep PR #3 draft until user review and end-to-end authenticated tests.
