@@ -1,0 +1,35 @@
+name: Qira Collab Worker checks
+on:
+  push:
+    branches: [feature/collabhub-cloudflare-dev-20261012]
+    paths:
+      - 'experiments/qira-collab/**'
+      - '.github/workflows/qira-collab-dev.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: cp experiments/qira-collab/worker.js /tmp/qira-collab-worker.mjs && node --check /tmp/qira-collab-worker.mjs
+      - name: MCP and authentication contract
+        run: node --test experiments/qira-collab/worker.test.mjs
+
+      - name: Public deployment health
+        run: |
+          curl --fail --silent --show-error --retry 2 --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/health | grep '"ok":true'
+      - name: Unauthorized access must fail closed
+        run: |
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/api/projects)
+          test "$code" = "401"
+
+      - name: Agent-to-agent persistence, permissions and MCP tests
+        run: node --experimental-sqlite --test experiments/qira-collab/collab.test.mjs
+      - name: Public phase-2 health and dashboard
+        run: |
+          curl --fail --silent --show-error --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/health | grep '"version":"0.2.0-dev"'
+          curl --fail --silent --show-error --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/ | grep 'Shared agent discussion room'

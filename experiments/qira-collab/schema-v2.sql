@@ -1,0 +1,11 @@
+-- Phase 2 additive schema; applied to qira-collab-dev-db on 2026-10-12.
+CREATE TABLE IF NOT EXISTS collab_threads (id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),title TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('discussion','planning','review','decision')),state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','resolved')),created_by TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_collab_threads ON collab_threads(project_id,updated_at);
+CREATE TABLE IF NOT EXISTS collab_posts (id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),thread_id TEXT NOT NULL REFERENCES collab_threads(id),actor TEXT NOT NULL,body TEXT NOT NULL,to_actor TEXT,reply_to TEXT,client_id TEXT,created_at TEXT NOT NULL,UNIQUE(project_id,actor,client_id));
+CREATE INDEX IF NOT EXISTS idx_collab_posts ON collab_posts(thread_id,created_at);
+CREATE TABLE IF NOT EXISTS collab_notes (id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),title TEXT NOT NULL,body TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('note','plan','decision','handoff')),state TEXT NOT NULL DEFAULT 'draft' CHECK(state IN ('draft','proposed','accepted','superseded')),version INTEGER NOT NULL DEFAULT 1,author TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_collab_notes ON collab_notes(project_id,updated_at);
+CREATE TABLE IF NOT EXISTS collab_inbox (id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),recipient TEXT NOT NULL,sender TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,thread_id TEXT,client_id TEXT,status TEXT NOT NULL DEFAULT 'unread' CHECK(status IN ('unread','acknowledged')),created_at TEXT NOT NULL,acknowledged_at TEXT,UNIQUE(project_id,sender,client_id));
+CREATE INDEX IF NOT EXISTS idx_collab_inbox ON collab_inbox(project_id,recipient,status,created_at);
+CREATE TABLE IF NOT EXISTS collab_integrations (id TEXT PRIMARY KEY,project_id TEXT NOT NULL REFERENCES projects(id),kind TEXT NOT NULL CHECK(kind IN ('github','webhook','mcp')),label TEXT NOT NULL,reference TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(project_id,kind,reference));
+CREATE INDEX IF NOT EXISTS idx_collab_integrations ON collab_integrations(project_id,kind);

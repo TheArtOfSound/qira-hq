@@ -1,0 +1,50 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+import {createHash} from "node:crypto";
+import {DatabaseSync} from "node:sqlite";
+const baseDir=new URL("./",import.meta.url);
+const source=await readFile(new URL("./worker.js",baseDir),"utf8");
+const app=(await import("data:text/javascript;base64,"+Buffer.from(source).toString("base64"))).default;
+const db=new DatabaseSync(":memory:");
+db.exec(await readFile(new URL("./schema.sql",baseDir),"utf8"));
+db.exec(await readFile(new URL("./schema-v2.sql",baseDir),"utf8"));
+const DB={prepare(sql){const statement=db.prepare(sql);let args=[];return {bind(...values){args=values;return this;},first(){return statement.get(...args)??null;},all(){return {results:statement.all(...args)};},run(){const r=statement.run(...args);return {meta:{changes:r.changes}};}}}};
+const bootstrap="qch_admin_test_distinct_identity_very_long";
+const env={DB,BOOTSTRAP_TOKEN:bootstrap};
+async function request(path,method="GET",body,token=bootstrap){const response=await app.fetch(new Request("https://qira-collab-test.example"+path,{method,headers:token?{Authorization:"Bearer "+token,"Content-Type":"application/json"}:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)}),env);const text=await response.text();return {status:response.status,body:text?JSON.parse(text):null};}
+function prepareToken(project,actor,role){const tok="qch_"+actor+"_the_token_used_by_"+actor+"_never_shared";const hash=createHash("sha256").update(tok).digest("hex");db.prepare("INSERT INTO tokens(token_hash,project_id,actor,role,created_at) VALUES(?,?,?,?,?)").run(hash,project,actor,role,new Date().toISOString());return tok;}
+test("collaboration: scoped actors exchange thread, plan, and inbox messages without impersonation",async()=>{
+  const create=await request("/api/projects","POST",{name:"Integration Test Project"});assert.equal(create.status,201);
+  const p=create.body.project.id;const root="/api/projects/"+p+"/collab";
+  const alice=prepareToken(p,"Alice","editor"),bob=prepareToken(p,"Bob","editor"),viewer=prepareToken(p,"Viewer","viewer");
+  const createdThread=await request(root+"/threads","POST",{title:"Shared plan",kind:"planning"},alice);assert.equal(createdThread.status,201);
+  const th=createdThread.body.thread.id;
+  const response=await request(root+"/threads/"+th+"/posts","POST",{body:"Alice proposes work division",to_actor:"Bob",client_id:"msg-1"},alice);assert.equal(response.status,201);assert.equal(response.body.post.actor,"Alice");
+  const dup=await request(root+"/threads/"+th+"/posts","POST",{body:"Duplicate",client_id:"msg-1"},alice);assert.equal(dup.status,200);assert.equal(dup.body.duplicate,true);
+  const bobThread=await request(root+"/threads/"+th+"/posts","GET",undefined,bob);assert.equal(bobThread.status,200);assert.equal(bobThread.body.posts.length,1);
+  const bobInbox=await request(root+"/inbox","GET",undefined,bob);assert.equal(bobInbox.status,200);assert.equal(bobInbox.body.messages.length,1);
+  assert.equal(bobInbox.body.messages[0].sender,"Alice");
+  const aliceInbox=await request(root+"/inbox","GET",undefined,alice);assert.equal(aliceInbox.body.messages.length,0);
+  const blockedAck=await request(root+"/inbox/"+bobInbox.body.messages[0].id+"/ack","POST",{},alice);assert.equal(blockedAck.status,403);
+  const ack=await request(root+"/inbox/"+bobInbox.body.messages[0].id+"/ack","POST",{},bob);assert.equal(ack.status,200);
+  const direct=await request(root+"/inbox","POST",{recipient:"Alice",subject:"Confirm API contract",body:"Ready for review.",client_id:"direct-1"},bob);assert.equal(direct.status,201);
+  const privateView=await request(root+"/inbox","GET",undefined,viewer);assert.equal(privateView.body.messages.length,0);
+  const plan=await request(root+"/notes","POST",{title:"Shared execution plan",body:"Phase 1 then phase 2",kind:"plan"},bob);assert.equal(plan.status,201);
+  const changed=await request(root+"/notes/"+plan.body.note.id,"PATCH",{version:1,body:"Phase 1 approved",state:"accepted"},alice);assert.equal(changed.status,200);assert.equal(changed.body.note.version,2);
+  const stale=await request(root+"/notes/"+plan.body.note.id,"PATCH",{version:1,body:"Overwrite"},bob);assert.equal(stale.status,409);
+  const viewerCannotWrite=await request(root+"/notes","POST",{title:"Bad write",body:"Denied"},viewer);assert.equal(viewerCannotWrite.status,403);
+  const ctx=await request(root+"/context","GET",undefined,alice);assert.equal(ctx.status,200);assert.equal(ctx.body.identity.actor,"Alice");assert.ok(ctx.body.notes.some(n=>n.title==="Shared execution plan"));assert.ok(ctx.body.my_unread_inbox.some(m=>m.subject==="Confirm API contract"));
+  const other=await request("/api/projects","POST",{name:"Private second project"});assert.equal(other.status,201);
+  assert.equal((await request("/api/projects/"+other.body.project.id+"/collab/context","GET",undefined,bob)).status,403);
+  assert.equal((await request(root+"/threads","GET",undefined,null)).status,401);
+});
+test("collaboration: MCP advertises and routes the new tools with actor identity",async()=>{
+ const proj=db.prepare("SELECT id FROM projects WHERE name='Integration Test Project'").get().id;
+ const aliceToken="qch_Alice_the_token_used_by_Alice_never_shared";
+ const list=await request("/mcp","POST",{jsonrpc:"2.0",method:"tools/list",id:5},aliceToken);
+ assert.equal(list.status,200);assert.ok(list.body.result.tools.some(t=>t.name==="get_project_context"));assert.ok(list.body.result.tools.some(t=>t.name==="send_agent_message"));
+ const ctx=await request("/mcp","POST",{jsonrpc:"2.0",id:7,method:"tools/call",params:{name:"get_project_context",arguments:{project_id:proj}}},aliceToken);
+ assert.equal(ctx.status,200);assert.equal(ctx.body.result.isError,false);
+ assert.equal(JSON.parse(ctx.body.result.content[0].text).identity.actor,"Alice");
+});
