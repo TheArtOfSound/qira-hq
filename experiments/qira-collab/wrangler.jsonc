@@ -1,0 +1,16 @@
+{
+  "name": "qira-collab-dev",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-12",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "qira-collab-dev-db",
+      "database_id": "f731dc90-fa42-4ccc-be9b-bfb9c022b1a1"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
