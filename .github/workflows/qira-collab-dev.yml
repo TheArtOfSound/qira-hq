@@ -26,3 +26,10 @@ jobs:
         run: |
           code=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/api/projects)
           test "$code" = "401"
+
+      - name: Agent-to-agent persistence, permissions and MCP tests
+        run: node --experimental-sqlite --test experiments/qira-collab/collab.test.mjs
+      - name: Public phase-2 health and dashboard
+        run: |
+          curl --fail --silent --show-error --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/health | grep '"version":"0.2.0-dev"'
+          curl --fail --silent --show-error --max-time 20 https://qira-collab-dev.bryanleonard237.workers.dev/ | grep 'Shared agent discussion room'
