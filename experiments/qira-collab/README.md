@@ -3,7 +3,7 @@
 **Live configuration (2026-10-12)**
 
 - Worker: `qira-collab-dev`
-- Tentative URL: https://qira-collab-dev.bryanleonard237.workers.dev
+- Verified public URL: https://qira-collab-dev.bryanleonard237.workers.dev
 - MCP URL: https://qira-collab-dev.bryanleonard237.workers.dev/mcp
 - D1 database: `qira-collab-dev-db` (`f731dc90-fa42-4ccc-be9b-bfb9c022b1a1`)
 - Isolated git branch: `feature/collabhub-cloudflare-dev-20261012`
@@ -19,7 +19,7 @@ npx wrangler secret put BOOTSTRAP_TOKEN --name qira-collab-dev
 ```
 Use a new unique high-entropy private token. Keep it out of the repository. The secret must be bound to this same script. After adding the secret, test auth and create a project via UI at the workers.dev URL. Note that the developer chat created a private token file locally, but rotating/generating a fresh token in a private shell is preferable.
 
-The live deployment API returned HTTP 200 and 100% version deployment with a D1 binding. External health URL could not be fetched from this assistant runtime (outbound requests to this workers.dev host are blocked by the tools' network policy), so public HTTP accessibility is **not verified**.
+The live deployment API returned HTTP 200 and 100% version deployment with a D1 binding. **Independent GitHub Actions on 2026-10-12 verified external `/health` HTTP 200 with `ok:true` and unauthenticated `/api/projects` HTTP 401**, even though this assistant's direct browser network blocks workers.dev outbound URLs. Actions run: https://github.com/TheArtOfSound/qira-hq/actions/runs/38301760133.
 
 ## Smoke checks
 ```powershell
