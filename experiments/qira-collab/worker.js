@@ -83,7 +83,7 @@ async function mcp(req,env,a){if(!a)return bad("Bearer token required",401);if(r
  if(n==="update_document"){path+="/"+encodeURIComponent(args.document_id||"");method="PATCH";body=args;}
  if(["create_task","post_message","create_document"].includes(n)){method="POST";body=args;}
  const url=new URL(path,req.url);let result;
- try{const virtual=new Request(url,{method,headers:req.headers,body:body?JSON.stringify(body):undefined});const res=await api(virtual,env,a,url);const output=await res.json();result={content:[{type:"text",text:JSON.stringify(output)}],isError:!res.ok};}
+ try{const virtual=new Request(url,{method,headers:{"Authorization":req.headers.get("Authorization")||"","Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});const res=await api(virtual,env,a,url);const output=await res.json();result={content:[{type:"text",text:JSON.stringify(output)}],isError:!res.ok};}
  catch(e){result={content:[{type:"text",text:"Tool failed: "+e.message}],isError:true};}
  return ok(result);}
  return json({jsonrpc:"2.0",id:v.id||null,error:{code:-32601,message:"Method not found"}},404);
